@@ -6,6 +6,7 @@
 #include <mastik/low.h>
 #include <mastik/util.h>
 #include "utils.h"
+#include "perf_event_wrapper.h"
 typedef void (*phfunc)();
 #define memory_barrier asm volatile("sfence;\nmfence;\nlfence");
 #define SAMPLES 5

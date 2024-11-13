@@ -1,5 +1,5 @@
  #include "phantom.h"
- #include "perf_event_wrapper.h"
+
 
  phfunc al_into_phfunc(assemblyline_t al) {
     phfunc ptr = (phfunc) asm_get_code(al);
@@ -95,9 +95,9 @@ bool ID_Channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
     END
     printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
     uint64_t cnt0 = 0, cnt1 = 0;
-    for (int i = 0; i < 1600; i++) {
+    for (int j = 0; j < 800; j++) {
         memory_barrier
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 32; i++) {
             // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
             // BEGIN
             // memory_barrier
@@ -106,26 +106,31 @@ bool ID_Channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
             // END
             // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
             // printf("(%d %d %d) ", cnt_access, cnt_hit, cnt_miss);
-            memory_barrier
-            BEGIN
+            // memory_barrier
+            // BEGIN
             train_func();
-            memory_barrier
-            END
+            // memory_barrier
+            // END
             // printf("(%d %d %d) ", cnt_access, cnt_hit, cnt_miss);
 
         }
         // printf("\n");
-        if (!(i & 1)) {
-            memory_barrier
-            evict_func();
-            evict_func();
-            evict_func();
-            evict_func();
-            // memory_barrier
-        }
-        memory_barrier
+        // if (!(i & 1)) {
+        //     memory_barrier
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // evict_func();
+        //     // memory_barrier
+        // }
+        // memory_barrier
 
         // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
+        memory_barrier
         BEGIN
         // memory_barrier
         victim_func();
@@ -133,26 +138,44 @@ bool ID_Channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
         END
         // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
         // printf("(%d %d %d)\n", cnt_access, cnt_hit, cnt_miss);
-        sum_access += cnt_access;
-        sum_hit += cnt_hit;
-        sum_miss += cnt_miss;
-        if (i & 1)
-            cnt0 += cnt_miss;
-        else
-            cnt1 += cnt_miss;
+        // sum_access += cnt_access;
+        // sum_hit += cnt_hit;
+        // sum_miss += cnt_miss;
+        // if (i & 1)
+        //     cnt0 += cnt_miss;
+        // else
+        //     cnt1 += cnt_miss;
+        cnt0 += cnt_miss;
+    }
+
+    for (int i = 0; i < 64; i++)
+        evict_func();
+    for (int j = 0; j < 800; j++) {
+        for (int i = 0; i < 32; i++)
+            train_func();
+        for (int i = 0; i < 1; i++)
+            evict_func();
+        memory_barrier
+        BEGIN
+        victim_func();
+        memory_barrier
+        END
+        cnt1 += cnt_miss;
+        // if (j == 9)
+        //     printf("%d ", cnt_miss);
     }
     // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
-    BEGIN
+    // BEGIN
     // memory_barrier
-    victim_func();
-    memory_barrier
+    // victim_func();
+    // memory_barrier
     // stop_and_read_counter(fd_access, &cnt_access);
     // stop_and_read_counter(fd_hit, &cnt_hit);
     // stop_and_read_counter(fd_miss, &cnt_miss);
     // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
-    END
+    // END
     // printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
-    printf("%llu %llu", cnt0, cnt1);
+    printf("%llu %llu", cnt0 / 800, cnt1 / 800);
     printf("\n");
     return true;
 }
@@ -174,3 +197,4 @@ bool EX_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
     return cnt > (SAMPLES - 1) / 2; 
 
 }
+

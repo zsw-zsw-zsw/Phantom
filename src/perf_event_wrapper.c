@@ -11,11 +11,11 @@ uint32_t setup_perf_event(uint32_t event_type, uint64_t config, uint32_t group_f
     pe.size = sizeof(perf_event_attr);
     pe.config = config;
     pe.disabled = 1;                 // Initially disabled
-    // pe.exclude_kernel = 1;           // Exclude kernel events
-    // pe.exclude_hv = 1;               // Exclude hypervisor events
-    pe.inherit = 1;
-    pe.enable_on_exec = 1;
-    pe.exclude_guest = 1;
+    pe.exclude_kernel = 1;           // Exclude kernel events
+    pe.exclude_hv = 1;               // Exclude hypervisor events
+    // pe.inherit = 1;
+    // pe.enable_on_exec = 1;
+    // pe.exclude_guest = 1;
     // int pid = getpid();
     // printf("%d\n", pid);
     int fd = perf_event_open(&pe, 0, -1, group_fd, 0);
