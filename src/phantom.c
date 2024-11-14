@@ -7,9 +7,9 @@
     return ptr;
 }
 
-uint32_t generate_JMP(assemblyline_t al, uint32_t jmp_num, uint32_t jmp_distance) {
+uint64_t generate_JMP(assemblyline_t al, uint32_t jmp_num, uint32_t jmp_distance) {
     char inst[32];
-    sprintf(inst, "JMP %u", jmp_distance);
+    sprintf(inst, "JMP 0x%x", jmp_distance);
     for (int i = 0; i < jmp_num; i++) {
         asm_assemble_str(al, inst);
         for (int i = 0; i < jmp_distance; i++)
@@ -70,113 +70,55 @@ bool IF_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
     return cnt > SAMPLES / 2;
 }
 
-#define BEGIN \
-            fd_miss = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_MISS_UMASK), -1);\
-            ioctl(fd_miss, PERF_EVENT_IOC_RESET, 0);\
-            ioctl(fd_miss, PERF_EVENT_IOC_ENABLE, 0);
-#define END \
-            ioctl(fd_miss, PERF_EVENT_IOC_DISABLE, 0);\
-            read(fd_miss, &cnt_miss, sizeof(uint64_t));\
-            close(fd_miss);
+// #define BEGIN \
+//             fd_miss = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_MISS_UMASK), -1);\
+//             ioctl(fd_miss, PERF_EVENT_IOC_RESET, 0);\
+//             ioctl(fd_miss, PERF_EVENT_IOC_ENABLE, 0);
+// #define END \
+//             ioctl(fd_miss, PERF_EVENT_IOC_DISABLE, 0);\
+//             read(fd_miss, &cnt_miss, sizeof(uint64_t));\
+//             close(fd_miss);
 
 
 
 bool ID_Channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
     uint32_t fd_access, fd_hit ,fd_miss;
-    uint64_t cnt_access = 0, cnt_hit = 0, cnt_miss;
+    uint64_t cnt_access = 0, cnt_hit = 0, cnt_miss = 0, cnt_tmp = 0;
     uint64_t sum_access, sum_hit, sum_miss;
-
-    // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
     BEGIN
-    // memory_barrier
-    victim_func();
-    memory_barrier
-    // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
-    END
-    printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
+    // printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
     uint64_t cnt0 = 0, cnt1 = 0;
     for (int j = 0; j < 800; j++) {
-        memory_barrier
-        for (int i = 0; i < 32; i++) {
-            // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
-            // BEGIN
-            // memory_barrier
-            // victim_func();
-            // memory_barrier
-            // END
-            // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
-            // printf("(%d %d %d) ", cnt_access, cnt_hit, cnt_miss);
-            // memory_barrier
-            // BEGIN
+        for (int i = 0; i < 32; i++)
             train_func();
-            // memory_barrier
-            // END
-            // printf("(%d %d %d) ", cnt_access, cnt_hit, cnt_miss);
-
-        }
-        // printf("\n");
-        // if (!(i & 1)) {
-        //     memory_barrier
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // evict_func();
-        //     // memory_barrier
-        // }
-        // memory_barrier
-
-        // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
+        // for (int i = 0; i < 16; i++)
+        //     evict_func();
         memory_barrier
-        BEGIN
-        // memory_barrier
+        SET_BREAK
         victim_func();
         memory_barrier
-        END
-        // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
-        // printf("(%d %d %d)\n", cnt_access, cnt_hit, cnt_miss);
-        // sum_access += cnt_access;
-        // sum_hit += cnt_hit;
-        // sum_miss += cnt_miss;
-        // if (i & 1)
-        //     cnt0 += cnt_miss;
-        // else
-        //     cnt1 += cnt_miss;
+        GET_SAMPLE
         cnt0 += cnt_miss;
     }
-
     for (int i = 0; i < 64; i++)
         evict_func();
     for (int j = 0; j < 800; j++) {
         for (int i = 0; i < 32; i++)
             train_func();
-        for (int i = 0; i < 1; i++)
+        for (int i = 0; i < 160; i++)
             evict_func();
         memory_barrier
-        BEGIN
+        SET_BREAK
         victim_func();
         memory_barrier
-        END
+        GET_SAMPLE
         cnt1 += cnt_miss;
         // if (j == 9)
         //     printf("%d ", cnt_miss);
     }
-    // start_op_cache_counter(&fd_access, &fd_hit, &fd_miss);
-    // BEGIN
-    // memory_barrier
-    // victim_func();
-    // memory_barrier
-    // stop_and_read_counter(fd_access, &cnt_access);
-    // stop_and_read_counter(fd_hit, &cnt_hit);
-    // stop_and_read_counter(fd_miss, &cnt_miss);
-    // stop_and_read_counter(fd_access, fd_hit, fd_miss, &cnt_access, &cnt_hit, &cnt_miss);
-    // END
-    // printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
     printf("%llu %llu", cnt0 / 800, cnt1 / 800);
     printf("\n");
+    END
     return true;
 }
 
