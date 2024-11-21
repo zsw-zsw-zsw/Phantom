@@ -1,5 +1,9 @@
- #include "phantom.h"
-
+#include "phantom.h"
+#ifdef PHANTOM_DEBUG
+#define PHANTOM_SAMPLES 10
+#else
+#define PHANTOM_SAMPLES 4096
+#endif
 
  phfunc al_into_phfunc(assemblyline_t al) {
     phfunc ptr = (phfunc) asm_get_code(al);
@@ -18,40 +22,46 @@ uint64_t generate_JMP(assemblyline_t al, uint32_t jmp_num, uint32_t jmp_distance
     return jmp_num * (jmp_distance + 5);
 }
 
-void start_op_cache_counter(uint32_t* fd_access, uint32_t* fd_hit, uint32_t* fd_miss) {
-    *fd_access = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_ACCESS_UMASK), -1);
-    *fd_hit = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_HIT_UMASK), -1);
-    *fd_miss = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_MISS_UMASK), -1);
-    ioctl(*fd_access, PERF_EVENT_IOC_RESET, 0);
-    ioctl(*fd_hit, PERF_EVENT_IOC_RESET, 0);
-    ioctl(*fd_miss, PERF_EVENT_IOC_RESET, 0);
-    ioctl(*fd_access, PERF_EVENT_IOC_ENABLE, 0);
-    ioctl(*fd_hit, PERF_EVENT_IOC_ENABLE, 0);
-    ioctl(*fd_miss, PERF_EVENT_IOC_ENABLE, 0);
+uint64_t create_alias(uint64_t addr) {
+    return addr ^ (1ull << 33) ^ (1ull << 21);
 }
 
-// uint32_t stop_and_read_counter(uint32_t fd, uint64_t* cnt) {
-//     ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
-//     read(fd, cnt, sizeof(uint64_t));
-//     close(fd);
-// }
-uint32_t stop_and_read_counter(uint32_t fd_access, uint32_t fd_hit, uint32_t fd_miss, uint64_t* cnt_access, uint64_t* cnt_hit, uint64_t* cnt_miss) {
-    ioctl(fd_access, PERF_EVENT_IOC_DISABLE, 0);
-    ioctl(fd_hit, PERF_EVENT_IOC_DISABLE, 0);
-    ioctl(fd_miss, PERF_EVENT_IOC_DISABLE, 0);
-    read(fd_access, cnt_access, sizeof(uint64_t));
-    read(fd_hit, cnt_hit, sizeof(uint64_t));
-    read(fd_miss, cnt_miss, sizeof(uint64_t));
-    close(fd_access);
-    close(fd_hit);
-    close(fd_miss);
-}
-
-
-bool IF_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
-    uint32_t cnt = 0;
+uint64_t IF_cmp() {
     uint64_t sum = 0;
-    for (int i = 0; i < SAMPLES; i++) {
+    #ifdef PHANTOM_DEBUG
+    printf("Sampled time: ");
+    #endif
+    for (int i = 0; i < PHANTOM_SAMPLES; i++) {
+        uint64_t test_addr = random_addr();
+        assemblyline_t test_al = create_al(test_addr, PAGE_SIZE << 2);
+        phfunc test_func = al_into_phfunc(test_al);
+        uint64_t monitor_addr = test_addr + PAGE_SIZE + rand() % PAGE_SIZE;
+        memory_barrier
+        clflush((void*)monitor_addr);
+        memory_barrier
+        delayloop(100000);
+        memory_barrier
+        uint64_t tim = memaccesstime((void*)monitor_addr);
+        #ifdef PHANTOM_DEBUG
+        printf("%d ", tim);
+        #endif
+        sum += tim;
+        free_buffer(test_func, PAGE_SIZE << 3);
+    }
+    #ifdef PHANTOM_DEBUG
+        printf("\n");
+    #endif
+    sum /= PHANTOM_SAMPLES;
+    return sum;
+}
+
+uint64_t IF_channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
+    uint64_t sum = 0;
+    #ifdef PHANTOM_DEBUG
+    // printf("Train address [%p]\nVictim address [%p]\nMonitor address [%p]\n", train_func, victim_func, monitor_addr);
+    printf("Sampled time: ");
+    #endif
+    for (int i = 0; i < PHANTOM_SAMPLES; i++) {
         memory_barrier
         for (int j = 0; j < 8; j++)
             train_func();
@@ -62,71 +72,80 @@ bool IF_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
         delayloop(100000);
         memory_barrier
         uint64_t tim = memaccesstime((void*)monitor_addr);
+        #ifdef PHANTOM_DEBUG
         printf("%d ", tim);
+        #endif
         sum += tim;
-        cnt += tim < IF_THRESHOLD;
     }
-    printf("%llu\n", sum / SAMPLES);
-    return cnt > SAMPLES / 2;
+    #ifdef PHANTOM_DEBUG
+        printf("\n");
+    #endif
+    return sum / PHANTOM_SAMPLES;
 }
 
-// #define BEGIN \
-//             fd_miss = setup_perf_event(PERF_TYPE_RAW, get_raw_config(OP_CACHE_HIT_MISS_EVENT, OP_CACHE_MISS_UMASK), -1);\
-//             ioctl(fd_miss, PERF_EVENT_IOC_RESET, 0);\
-//             ioctl(fd_miss, PERF_EVENT_IOC_ENABLE, 0);
-// #define END \
-//             ioctl(fd_miss, PERF_EVENT_IOC_DISABLE, 0);\
-//             read(fd_miss, &cnt_miss, sizeof(uint64_t));\
-//             close(fd_miss);
-
-
-
-bool ID_Channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
-    uint32_t fd_access, fd_hit ,fd_miss;
-    uint64_t cnt_access = 0, cnt_hit = 0, cnt_miss = 0, cnt_tmp = 0;
-    uint64_t sum_access, sum_hit, sum_miss;
+uint64_t ID_cmp(phfunc train_func, phfunc evict_func, phfunc victim_func) {
+    uint32_t fd_pfm;
+    uint64_t cnt_pfm = 0, cnt_tmp = 0;
+    uint64_t sum_pfm = 0;
+    #ifdef PHANTOM_DEBUG
+    printf("Sampled time: ");
+    #endif
     BEGIN
-    // printf("[%d %d %d] ", cnt_access, cnt_hit, cnt_miss);
-    uint64_t cnt0 = 0, cnt1 = 0;
-    for (int j = 0; j < 800; j++) {
-        for (int i = 0; i < 32; i++)
-            train_func();
-        // for (int i = 0; i < 16; i++)
-        //     evict_func();
+    for (int j = 0; j < PHANTOM_SAMPLES; j++) {
         memory_barrier
         SET_BREAK
         victim_func();
         memory_barrier
         GET_SAMPLE
-        cnt0 += cnt_miss;
+        sum_pfm += cnt_pfm;
+        #ifdef PHANTOM_DEBUG
+        printf("%d ", cnt_pfm);
+        #endif
     }
-    for (int i = 0; i < 64; i++)
-        evict_func();
-    for (int j = 0; j < 800; j++) {
-        for (int i = 0; i < 32; i++)
-            train_func();
-        for (int i = 0; i < 160; i++)
-            evict_func();
-        memory_barrier
-        SET_BREAK
-        victim_func();
-        memory_barrier
-        GET_SAMPLE
-        cnt1 += cnt_miss;
-        // if (j == 9)
-        //     printf("%d ", cnt_miss);
-    }
-    printf("%llu %llu", cnt0 / 800, cnt1 / 800);
-    printf("\n");
     END
-    return true;
+    #ifdef PHANTOM_DEBUG
+        printf("\n");
+    #endif
+    return sum_pfm / PHANTOM_SAMPLES;
+}
+uint64_t ID_channel(phfunc train_func, phfunc evict_func, phfunc victim_func) {
+    uint32_t fd_pfm;
+    uint64_t cnt_pfm = 0, cnt_tmp = 0;
+    uint64_t sum_pfm = 0;
+    BEGIN
+    #ifdef PHANTOM_DEBUG
+    printf("Sampled time: ");
+    #endif
+    for (int j = 0; j < PHANTOM_SAMPLES; j++) {
+        for (int i = 0; i < 32; i++)
+            train_func();
+        memory_barrier
+        SET_BREAK
+        victim_func();
+        memory_barrier
+        GET_SAMPLE
+        sum_pfm += cnt_pfm;
+        #ifdef PHANTOM_DEBUG
+        printf("%d ", cnt_pfm);
+        #endif
+    }
+    END
+    #ifdef PHANTOM_DEBUG
+        printf("\n");
+    #endif
+    return sum_pfm / PHANTOM_SAMPLES;
 }
 
-bool EX_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
+uint64_t EX_channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
     uint32_t cnt = 0;
-    for (int i = 0; i < SAMPLES; i++) {
+    uint64_t sum = 0;
+    #ifdef PHANTOM_DEBUG
+    printf("Sampled time: ");
+    #endif
+    for (int i = 0; i < PHANTOM_SAMPLES; i++) {
         memory_barrier
-        train_func();
+        for (int j = 0; j < 128; j++)
+            train_func();
         memory_barrier
         clflush((void*)monitor_addr);
         memory_barrier
@@ -134,9 +153,17 @@ bool EX_Channel(phfunc train_func, phfunc victim_func, uint64_t monitor_addr) {
         delayloop(100000);
         memory_barrier
         uint64_t tim = memaccesstime((void*)monitor_addr);
-        cnt += tim < IF_THRESHOLD;
+        #ifdef PHANTOM_DEBUG
+        printf("%d ", tim);
+        #endif
+        sum += tim;
+        // cnt += tim < IF_THRESHOLD;
     }
-    return cnt > (SAMPLES - 1) / 2; 
+    #ifdef PHANTOM_DEBUG
+        printf("\n");
+    #endif
+    return sum / PHANTOM_SAMPLES;
+    // return cnt > SAMPLES / 2;
 
 }
 

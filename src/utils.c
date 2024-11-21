@@ -1,6 +1,6 @@
 #include "utils.h"
 
-uint64_t random_address() {
+uint64_t random_addr() {
     return ((uint64_t)rand() << 16) | rand();
 }
 
@@ -15,7 +15,7 @@ void* create_buffer(uint64_t addr, uint64_t size) {
                         -1, 0);
     
     if (pg_ptr == MAP_FAILED) {
-        printf(stderr, "Cannot allocate memory!");
+        fprintf(stderr, "Cannot allocate memory!");
         exit(0);
     }
     // printf("%llu\n", pg_ptr);
@@ -25,7 +25,7 @@ void* create_buffer(uint64_t addr, uint64_t size) {
 void free_buffer(uint64_t addr, uint64_t size) {
     uint64_t pg_addr = addr & ((uint64_t)(-1) ^ (0xfff));
     uint64_t page_size = (size + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
-    munmap(addr, page_size);
+    munmap(pg_addr, page_size);
 }
 
 assemblyline_t create_al(uint64_t addr, uint64_t size) {

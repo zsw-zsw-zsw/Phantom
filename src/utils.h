@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #define PAGE_SIZE 4096
-uint64_t random_address();
+uint64_t random_addr();
 void* create_buffer(uint64_t addr, uint64_t size);
 void free_buffer(uint64_t addr, uint64_t size);
 assemblyline_t create_al(uint64_t addr, uint64_t size);

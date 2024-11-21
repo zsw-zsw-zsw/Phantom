@@ -14,10 +14,7 @@
 #include <linux/hw_breakpoint.h>
 #include <unistd.h>
 
-#define OP_CACHE_HIT_MISS_EVENT 0x28f
-#define OP_CACHE_HIT_UMASK 0x3
-#define OP_CACHE_MISS_UMASK 0x4
-#define OP_CACHE_ACCESS_UMASK 0x7
+
 typedef struct perf_event_attr perf_event_attr;
 uint32_t perf_event_open(perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags);
 uint32_t setup_perf_event(uint32_t event_type, uint64_t config, uint32_t group_fd);
