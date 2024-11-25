@@ -1,4 +1,4 @@
-#include <cstring>
+#include <string>
 #include <cstdint>
 enum OP_Type {
     R_Type,
@@ -9,16 +9,16 @@ enum OP_Type {
     U_Type
 };
 struct OP_Node {
-    string inst;
+    std::string inst;
     OP_Type type;
     uint8_t op_code;
     uint8_t func3_code;
     uint8_t func7_code;
-    OP_Type() {}
-    OP_Type(string inst, OP_Type type, uint8_t op_code, uint8_t func3_code, uint8_t func7_code) :
+    OP_Node() {}
+    OP_Node(std::string inst, OP_Type type, uint8_t op_code, uint8_t func3_code, uint8_t func7_code) :
         inst(inst), type(type), op_code(op_code), func3_code(func3_code), func7_code(func7_code) {}
 };
-OP_Node op_list = {
+OP_Node op_list[] = {
     OP_Node("add", R_Type, 0b0110011, 0x0, 0x00),
     OP_Node("sub", R_Type, 0b0110011, 0x0, 0x20),
     OP_Node("xor", R_Type, 0b0110011, 0x4, 0x00),
@@ -58,4 +58,4 @@ OP_Node op_list = {
     OP_Node("auipc", U_Type, 0b0010111, 0, 0),
     OP_Node("ecall", I_Type, 0b1110011, 0x0, 0x0),
     OP_Node("ebreak", I_Type, 0b1110011, 0x0, 0x1)
-}
+};
