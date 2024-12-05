@@ -407,20 +407,67 @@
 #define EVENT_BASE 0x320
 #define COUNTER_BASE 0xb00
 
-#define clear_counter(id) syscall(SET_PERF, COUNTER_BASE + id, 0x0UL)
-#define clear_event(id) syscall(SET_PERF, EVENT_BASE + id, 0x0UL)
+// #define clear_counter(id) syscall(SET_PERF, COUNTER_BASE + id, 0x0UL)
+// #define clear_event(id) syscall(SET_PERF, EVENT_BASE + id, 0x0UL)
 
-#define print_event(id) printf("mhpmevent%d: %lx\n", id, syscall(GET_PERF, EVENT_BASE + id))
-#define print_counter(id) printf("mhpmcounter%d: %lu\n", id, syscall(GET_PERF, COUNTER_BASE + id))
-#define printd_csr(csr) printf(#csr": %ld\n", syscall(GET_PERF, csr))
-#define printu_csr(csr) printf(#csr": %lu\n", syscall(GET_PERF, csr))
-#define printx_csr(csr) printf(#csr": %lx\n", syscall(GET_PERF, csr))
+// #define print_event(id) printf("mhpmevent%d: %lx\n", id, syscall(GET_PERF, EVENT_BASE + id))
+// #define print_counter(id) printf("mhpmcounter%d: %lu\n", id, syscall(GET_PERF, COUNTER_BASE + id))
+// #define printd_csr(csr) printf(#csr": %ld\n", syscall(GET_PERF, csr))
+// #define printu_csr(csr) printf(#csr": %lu\n", syscall(GET_PERF, csr))
+// #define printx_csr(csr) printf(#csr": %lx\n", syscall(GET_PERF, csr))
 
-#define get_csr(csr_id) syscall(GET_PERF, EVENT_BASE + csr_id)
+#define __ASM_STR(x)	#x
+#define csr_read(csr)                                           \
+	({                                                      \
+		register unsigned long __v;                     \
+		__asm__ __volatile__("csrr %0, " __ASM_STR(csr) \
+				     : "=r"(__v)                \
+				     :                          \
+				     : "memory");               \
+		__v;                                            \
+	})
+
+#define csr_write(csr, val)                                        \
+	({                                                         \
+		unsigned long __v = (unsigned long)(val);          \
+		__asm__ __volatile__("csrw " __ASM_STR(csr) ", %0" \
+				     :                             \
+				     : "rK"(__v)                   \
+				     : "memory");                  \
+	})
+
+#define csr_set(csr, val)                                          \
+	({                                                         \
+		unsigned long __v = (unsigned long)(val);          \
+		__asm__ __volatile__("csrs " __ASM_STR(csr) ", %0" \
+				     :                             \
+				     : "rK"(__v)                   \
+				     : "memory");                  \
+	})
+
+#define csr_clear(csr, val)                                        \
+	({                                                         \
+		unsigned long __v = (unsigned long)(val);          \
+		__asm__ __volatile__("csrc " __ASM_STR(csr) ", %0" \
+				     :                             \
+				     : "rK"(__v)                   \
+				     : "memory");                  \
+	})
+
+#define clear_event(id) csr_write(mhpmevent##id, 0x0UL)
+#define print_event(id) printf("mhpmevent%d: %lx\n", id, csr_read(mhpmevent##id))
+#define clear_counter(id) csr_write(mhpmcounter##id, 0x0UL)
+#define print_counter(id) printf("mhpmcounter%d: %lu\n", id, csr_read(mhpmcounter##id))
+#define printd_csr(csr) printf(#csr": %ld\n", csr_read(csr))
+#define printu_csr(csr) printf(#csr": %lu\n", csr_read(csr))
+#define printx_csr(csr) printf(#csr": %lx\n", csr_read(csr))
+#define get_counter(id) csr_read(mhpmcounter##id)
+
+// #define get_csr(csr_id) syscall(GET_PERF, EVENT_BASE + csr_id)
 
 #define set_event_quad(csr_id, mode, optype2, optype1, optype0, event3, event2, event1, event0) \
     {   \
-        uint64_t value = syscall(GET_PERF, EVENT_BASE + csr_id); \
+        uint64_t value = csr_read(mhpmevent##csr_id); \
         SET(value, MODE, mode); \
         SET(value, OPTYPE2, optype2); \
         SET(value, OPTYPE1, optype1); \
@@ -429,7 +476,7 @@
         SET(value, EVENT2, event2); \
         SET(value, EVENT1, event1); \
         SET(value, EVENT0, event0); \
-        syscall(SET_PERF, EVENT_BASE + csr_id, value); \
+        csr_write(mhpmevent##csr_id, value); \
     }
 
 #define set_event_double(csr_id, mode, optype0, event1, event0) \
