@@ -25,14 +25,14 @@ void* create_buffer(uint64_t addr, uint64_t size) {
 void free_buffer(uint64_t addr, uint64_t size) {
     uint64_t pg_addr = addr & ((uint64_t)(-1) ^ (0xfff));
     uint64_t page_size = (size + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
-    munmap(pg_addr, page_size);
+    munmap((void*)pg_addr, page_size);
 }
 
-assemblyline_t create_al(uint64_t addr, uint64_t size) {
-    void *buf = create_buffer(addr, size);
-    return asm_create_instance(buf, size);
-}
+// assemblyline_t create_al(uint64_t addr, uint64_t size) {
+//     void *buf = create_buffer(addr, size);
+//     return asm_create_instance((uint8_t*)buf, size);
+// }
 
-void free_al(assemblyline_t al) {
-    asm_destroy_instance(al);
-}
+// void free_al(assemblyline_t al) {
+//     asm_destroy_instance(al);
+// }

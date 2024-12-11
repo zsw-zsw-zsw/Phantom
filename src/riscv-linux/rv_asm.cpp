@@ -1,10 +1,12 @@
+
+
 #include "rv_asm.h"
 #include <vector>
 #include <map>
 #include <assert.h>
 #define ECHO_ERROR(s) \
-    fprintf(stderr, "Fatal error: %s!", s);\
-    exit(0)
+    (fprintf(stderr, "Fatal error: %s!\n", s),\
+    exit(0), 0)
 
 #define CHECK_BIT_LEN_U(x, r) \
     ((x) < (1 << (r)))
@@ -151,3 +153,4 @@ uint32_t OP_format(std::string op_name, std::vector<uint32_t> arg_list) {
     }
     assert(false);
 }
+

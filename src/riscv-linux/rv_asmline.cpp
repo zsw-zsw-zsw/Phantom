@@ -1,11 +1,15 @@
+
 #include "rv_asmline.h"
 #include <cstdlib>
+
 void RVAsmline::add_stmt(std::string op_name, std::vector<uint32_t> oprd) {
     this->stmt_que.push_back(RVStmt(op_name, oprd));
 }
 void RVAsmline::assemble() {
     for (auto &stmt : this->stmt_que) {
+        puts("1");
         auto binary_code = OP_format(stmt.inst, stmt.oprd);
+        puts("1");
         *this->current++ = binary_code;
     }
 }

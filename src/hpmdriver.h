@@ -2,7 +2,7 @@
 #define __EVENTS_H__
 
 #include <stdio.h>
-#include <sys/syscall.h>
+// #include <sys/syscall.h>
 #include <stdint.h>
 
 // due to the probable performance event change
